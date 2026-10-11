@@ -49,8 +49,17 @@
 #include "io/dronecan/dronecan_airspeed.h"
 #endif
 
+// Default bus for an add-on airspeed sensor: the one the board routes to its
+// external compass pads, else the baro bus. A board without either (and
+// without I2C_DEVICE) gets no default and needs pitot_i2c_device set.
 #ifndef PITOT_I2C_INSTANCE
+#if defined(MAG_I2C_INSTANCE)
+#define PITOT_I2C_INSTANCE MAG_I2C_INSTANCE
+#elif defined(BARO_I2C_INSTANCE)
+#define PITOT_I2C_INSTANCE BARO_I2C_INSTANCE
+#else
 #define PITOT_I2C_INSTANCE I2C_DEVICE
+#endif
 #endif
 
 #define PITOT_CALIBRATION_SAMPLES TASK_PITOT_RATE_HZ  // ~1 s of at-rest samples
@@ -105,7 +114,11 @@ static bool detectI2C(void)
     if (pitotConfig()->pitot_busType != BUS_TYPE_I2C) {
         return false;
     }
-    i2cBusSetInstance(extDev, pitotConfig()->pitot_i2c_device);
+    // An unset or out-of-range pitot_i2c_device leaves extDev->bus NULL, which
+    // ms4525Detect() would dereference.
+    if (!i2cBusSetInstance(extDev, pitotConfig()->pitot_i2c_device)) {
+        return false;
+    }
     extDev->busType_u.i2c.address = pitotConfig()->pitot_i2c_address;
     return ms4525Detect(&pitot.dev);
 #else
